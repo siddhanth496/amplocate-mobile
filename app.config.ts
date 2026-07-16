@@ -9,11 +9,11 @@ const config: ExpoConfig = {
   icon: './assets/icon.png',
   userInterfaceStyle: 'dark',
   newArchEnabled: true,
-  backgroundColor: '#0B1118',
+  backgroundColor: '#0c0e10',
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
-    backgroundColor: '#0B1118',
+    backgroundColor: '#0c0e10',
   },
   ios: {
     supportsTablet: false,
@@ -27,7 +27,7 @@ const config: ExpoConfig = {
     package: 'app.amplocate.mobile',
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#0B1118',
+      backgroundColor: '#0c0e10',
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
