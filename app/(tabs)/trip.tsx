@@ -29,6 +29,8 @@ export default function TripScreen() {
   const [soc, setSoc] = useState(80);
   const [active, setActive] = useState<string | null>('dest');
   const [pins, setPins] = useState<Record<number, string>>({});
+  // waypoint index -> charger id: "I'll charge here" declarations (hop mechanic)
+  const [wpCharges, setWpCharges] = useState<Record<number, string>>({});
   const [plan, setPlan] = useState<TripPlan | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +66,12 @@ export default function TripScreen() {
     setActive(null);
   };
 
-  const runPlan = async (pinned: Record<number, string> = pins) => {
-    const wps = points.waypoints.filter(Boolean) as Place[];
+  const runPlan = async (
+    pinned: Record<number, string> = pins,
+    wpsOverride?: Place[],
+    chargesOverride?: Record<number, string>,
+  ) => {
+    const wps = (wpsOverride ?? points.waypoints.filter(Boolean)) as Place[];
     if (!points.origin || !points.dest || !vehicleId) return;
     setBusy(true); setError(null);
     try {
@@ -76,6 +82,9 @@ export default function TripScreen() {
         vehicle_id: vehicleId,
         departure_soc: soc,
         pinned_chargers: Object.fromEntries(Object.entries(pinned).map(([k, v]) => [String(k), v])),
+        waypoint_charges: Object.fromEntries(
+          Object.entries(chargesOverride ?? wpCharges).map(([k, v]) => [String(k), v]),
+        ),
       });
       setPlan(res);
     } catch (e: any) { setError(e.message); }
@@ -189,7 +198,21 @@ export default function TripScreen() {
                     </View>
                   </Pressable>
                   {'wpIndex' in row && (
-                    <Pressable onPress={() => { reset(); setPoints((p) => ({ ...p, waypoints: p.waypoints.filter((_, x) => x !== (row as any).wpIndex) })); setActive(null); }}
+                    <Pressable onPress={() => {
+                      const rm = (row as any).wpIndex as number;
+                      reset();
+                      setWpCharges((c) => {
+                        const next: Record<number, string> = {};
+                        for (const [k, v] of Object.entries(c)) {
+                          const idx = Number(k);
+                          if (idx === rm) continue;
+                          next[idx > rm ? idx - 1 : idx] = v;
+                        }
+                        return next;
+                      });
+                      setPoints((p) => ({ ...p, waypoints: p.waypoints.filter((_, x) => x !== rm) }));
+                      setActive(null);
+                    }}
                       style={{ padding: 12 }}>
                       <X size={14} color={colors.textTertiary} />
                     </Pressable>
@@ -312,6 +335,56 @@ export default function TripScreen() {
           ))}
 
           {!plan.feasible && plan.note && <ErrorNote message={plan.note} />}
+
+          {/* Reachable chargers you can hop to when the trip isn't plannable */}
+          {!plan.feasible && plan.suggestions?.length > 0 && (
+            <Card>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <BatteryCharging size={15} color={colors.brand} />
+                <Display size={14}>Chargers you can reach right now</Display>
+              </View>
+              <Txt size={11} color={colors.textTertiary} style={{ marginBottom: 10 }}>
+                Add one as a stop — you'll charge there, then we replan the rest.
+              </Txt>
+              <View style={{ gap: 8 }}>
+                {plan.suggestions.map((s) => (
+                  <View key={s.charger.id} style={{ backgroundColor: colors.surface2, borderRadius: radius.r4, padding: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <RelRing score={s.charger.reliability_score} size={36} />
+                      <View style={{ flex: 1 }}>
+                        <Txt size={13} family={font.bold} numberOfLines={1}>{s.charger.name}</Txt>
+                        <Txt size={10} color={colors.textTertiary}>
+                          arrive at {Math.round(s.arrival_soc)}% · charge to {Math.round(s.target_soc)}% in ~{Math.round(s.dwell_minutes)} min
+                        </Txt>
+                      </View>
+                    </View>
+                    <Pressable
+                      disabled={busy}
+                      onPress={() => {
+                        const wp: Place = { label: `⚡ ${s.charger.name}`, lat: s.charger.lat, lng: s.charger.lng };
+                        const wps = [...points.waypoints.filter(Boolean)] as Place[];
+                        wps.splice(s.leg_index, 0, wp);
+                        // shift existing charge declarations at/after the insert point
+                        const charges: Record<number, string> = {};
+                        for (const [k, v] of Object.entries(wpCharges)) {
+                          const idx = Number(k);
+                          charges[idx >= s.leg_index ? idx + 1 : idx] = v;
+                        }
+                        charges[s.leg_index] = s.charger.id;
+                        setWpCharges(charges);
+                        setPoints((p) => ({ ...p, waypoints: wps }));
+                        setPins({});
+                        runPlan({}, wps, charges);
+                      }}
+                      style={{ backgroundColor: colors.brand, borderRadius: radius.r2, paddingVertical: 8, alignItems: 'center', marginTop: 10 }}
+                    >
+                      <Txt size={11} family={font.bold} color={colors.onBrand}>Add as stop & replan</Txt>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          )}
 
           {/* Timeline */}
           {plan.feasible && (

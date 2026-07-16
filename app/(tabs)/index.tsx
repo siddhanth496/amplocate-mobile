@@ -75,6 +75,7 @@ export default function DiscoverScreen() {
   const [chargers, setChargers] = useState<Charger[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [locReady, setLocReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [connector, setConnector] = useState<string | null>(null);
@@ -85,16 +86,24 @@ export default function DiscoverScreen() {
   useEffect(() => {
     listMyVehicles().then(setVehicles).catch(() => {});
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-      setUserLoc(loc);
-      setCenter(loc);
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+          setUserLoc(loc);
+          setCenter(loc);
+        }
+      } finally {
+        // Only start searching once we know where the user is (or that we
+        // can't know) — avoids a first fetch centered on the wrong city.
+        setLocReady(true);
+      }
     })();
   }, []);
 
   const fetchChargers = useCallback(async () => {
+    if (!locReady) return;
     setLoading(true); setError(null);
     try {
       const rows = await getNearby({
@@ -106,7 +115,7 @@ export default function DiscoverScreen() {
       setChargers(rows);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, [center, connector, reliableOnly, vehicle?.id]);
+  }, [center, connector, reliableOnly, vehicle?.id, locReady]);
 
   useEffect(() => { fetchChargers(); }, [fetchChargers]);
 

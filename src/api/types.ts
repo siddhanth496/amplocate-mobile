@@ -59,6 +59,7 @@ export type TripStop = {
 export type TripPlan = {
   feasible: boolean;
   stops: TripStop[];
+  suggestions: TripStop[];
   destination_arrival_soc: number | null;
   total_distance_km: number;
   drive_minutes: number;

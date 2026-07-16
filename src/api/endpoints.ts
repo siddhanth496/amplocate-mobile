@@ -39,6 +39,7 @@ export const planTrip = (body: {
   vehicle_id: string;
   departure_soc?: number;
   pinned_chargers?: Record<string, string>;
+  waypoint_charges?: Record<string, string>;
 }) => api.post<TripPlan>('/trips/plan', body);
 
 // ── Geocoding (OpenStreetMap Nominatim, free) ──
