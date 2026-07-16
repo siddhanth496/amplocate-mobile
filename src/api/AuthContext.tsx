@@ -10,7 +10,7 @@ type AuthValue = {
   user: User | null;
   signIn: (token: string) => Promise<void>;
   signOut: () => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
