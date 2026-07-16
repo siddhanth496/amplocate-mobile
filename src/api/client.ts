@@ -47,15 +47,26 @@ export async function apiRequest<T = any>(path: string, options: Options = {}): 
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
+  // Timeout guard — the free-tier server sleeps and can take ~60s to wake,
+  // and a request must never hang the UI forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 70_000);
+
   let resp: Response;
   try {
     resp = await fetch(url.toString(), {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
-  } catch {
-    throw new ApiError(0, 'Cannot reach Amplocate — check your connection (the free server may take ~50s to wake up).');
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      throw new ApiError(0, 'The server is taking too long — it may be waking from sleep. Please try again in a minute.');
+    }
+    throw new ApiError(0, 'Cannot reach Amplocate — check your connection (the free server may take ~60s to wake up).');
+  } finally {
+    clearTimeout(timer);
   }
 
   if (resp.status === 401 && auth) await setToken(null);

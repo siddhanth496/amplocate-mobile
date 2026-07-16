@@ -19,17 +19,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [user, setUser] = useState<User | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<boolean> => {
     const token = await getToken();
-    if (!token) { setStatus('unauthenticated'); setUser(null); return; }
+    if (!token) { setStatus('unauthenticated'); setUser(null); return false; }
     try {
       const me = await getMe();
       setUser(me);
       setStatus('authenticated');
-    } catch {
-      await setToken(null);
+      return true;
+    } catch (e: any) {
+      // Only discard the token if the server explicitly rejected it —
+      // a network hiccup / cold start shouldn't log the user out.
+      if (e?.status === 401) await setToken(null);
       setUser(null);
       setStatus('unauthenticated');
+      return false;
     }
   }, []);
 
@@ -37,8 +41,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (token: string) => {
     await setToken(token);
-    setStatus('loading');
-    await load();
+    const ok = await load();
+    if (!ok) {
+      throw new Error('Logged in, but the server took too long to respond — tap Verify again in a few seconds.');
+    }
   }, [load]);
 
   const signOut = useCallback(async () => {
